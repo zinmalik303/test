@@ -225,6 +225,11 @@ useEffect(() => {
 
 
   const renderTaskButton = (task: 'telegram' | 'instagram' | 'survey') => {
+    const isVerifying = task in verifyingTasks;
+    const countdown = verifyingTasks[task];
+    const maxTime = 10;
+    const progress = isVerifying ? ((maxTime - countdown) / maxTime) * 100 : 0;
+
     if (completedTasks[task]) {
       return (
         <div className="w-full rounded-lg py-2 px-4 bg-green-500/10 text-green-400 flex items-center justify-center">
@@ -234,11 +239,23 @@ useEffect(() => {
       );
     }
 
-    if (isVerifying && currentTask === task) {
+    if (isVerifying) {
       return (
-        <div className="w-full rounded-lg py-2 px-4 bg-blue-500/10 text-blue-400 flex items-center justify-center">
-          <Clock className="w-4 h-4 mr-2 animate-spin" />
-          <span className="font-medium">Verifying... {verificationCountdown}s</span>
+        <div className="relative w-full">
+          <div className="relative h-12 w-full bg-gradient-to-r from-gray-800 to-gray-700 rounded-lg overflow-hidden">
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-1000"
+              style={{
+                width: `${progress}%`,
+              }}
+            />
+            <div className="relative z-10 flex items-center justify-center h-full">
+              <Loader2 className="w-4 h-4 mr-2 animate-spin text-white" />
+              <span className="text-white font-medium">
+                Checking task... {countdown}s
+              </span>
+            </div>
+          </div>
         </div>
       );
     }
