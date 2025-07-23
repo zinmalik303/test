@@ -1,112 +1,148 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Task, TaskStatus, TaskSubmission } from '../types';
+import { Task, TaskStatus } from '../types';
 import { mockTasks } from '../data/initialData';
 import { useAuth } from './AuthContext';
+import { supabase, TaskSubmission as DBTaskSubmission, UserProgress } from '../lib/supabase';
+
+interface TaskSubmission {
+  taskId: string;
+  userId: string;
+  status: TaskStatus;
+  submittedAt: string;
+  text?: string;
+  screenshot?: string;
+}
 
 interface TaskContextType {
   tasks: Task[];
   userSubmissions: TaskSubmission[];
+  completedTasks: Record<string, boolean>;
+  completedFirstClick: Record<string, boolean>;
+  visitedTasks: Record<string, boolean>;
+  globalAttemptCount: number;
+  failAttemptCount: number;
   getTaskById: (id: string) => Task | undefined;
   getUserTaskSubmission: (taskId: string) => TaskSubmission | undefined;
   submitTask: (
     taskId: string,
     data: { screenshot?: string; text?: string },
     onFirstFail?: () => void
-  ) => Promise<void>;
-
+  ) => Promise<boolean>;
+  updateCompletedTasks: (taskId: string, completed: boolean) => Promise<void>;
+  updateCompletedFirstClick: (taskId: string, clicked: boolean) => Promise<void>;
+  updateVisitedTasks: (taskId: string, visited: boolean) => Promise<void>;
+  incrementGlobalAttemptCount: () => Promise<void>;
+  incrementFailAttemptCount: () => Promise<void>;
   isVerifying: boolean;
   verificationCountdown: number;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-const MAX_STORED_SUBMISSIONS = 1000;
-
-const optimizeSubmissionForStorage = (submission: TaskSubmission): TaskSubmission => {
-  return {
-    taskId: submission.taskId,
-    userId: submission.userId,
-    status: submission.status,
-    submittedAt: submission.submittedAt,
-    text: submission.text?.slice(0, 1000) || undefined,
-    screenshot: submission.screenshot ? 'screenshot-saved' : undefined,
-  };
-};
-
 export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tasks] = useState<Task[]>(mockTasks);
-  const { updateTasksCompleted } = useAuth();
-
-  const [userSubmissions, setUserSubmissions] = useState<TaskSubmission[]>(() => {
-    try {
-      const stored = localStorage.getItem('userSubmissions');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load userSubmissions from localStorage:', error);
-    }
-    return [];
-  });
-
-  const [failAttemptCount, setFailAttemptCount] = useState(() => {
-    const raw = localStorage.getItem('failAttemptCount');
-    return raw ? parseInt(raw) : 0;
-  });
-
+  const [userSubmissions, setUserSubmissions] = useState<TaskSubmission[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
+  const [completedFirstClick, setCompletedFirstClick] = useState<Record<string, boolean>>({});
+  const [visitedTasks, setVisitedTasks] = useState<Record<string, boolean>>({});
+  const [globalAttemptCount, setGlobalAttemptCount] = useState(0);
+  const [failAttemptCount, setFailAttemptCount] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCountdown, setVerificationCountdown] = useState(10);
 
+  const { supabaseUser, updateTasksCompleted } = useAuth();
+
+  // Load user data when user changes
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    const checkVerification = () => {
-      const failAtRaw = localStorage.getItem('verificationFailAt');
-      if (!failAtRaw) return;
-
-      const failAt = parseInt(failAtRaw);
-      const timeLeft = Math.max(0, Math.floor((failAt - Date.now()) / 1000));
-      if (timeLeft > 0) {
-        setIsVerifying(true);
-        setVerificationCountdown(timeLeft);
-
-        interval = setInterval(() => {
-          const newTimeLeft = Math.max(0, Math.floor((failAt - Date.now()) / 1000));
-          setVerificationCountdown(newTimeLeft);
-
-          if (newTimeLeft <= 0) {
-            clearInterval(interval!);
-            localStorage.removeItem('verificationFailAt');
-            setIsVerifying(false);
-            window.dispatchEvent(new Event('task-verification-failed'));
-          }
-        }, 500);
-      } else {
-        localStorage.removeItem('verificationFailAt');
-      }
-    };
-
-    checkVerification();
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    try {
-      const recentSubmissions = userSubmissions
-        .slice(-MAX_STORED_SUBMISSIONS)
-        .map(optimizeSubmissionForStorage);
-
-      localStorage.setItem('userSubmissions', JSON.stringify(recentSubmissions));
-    } catch (error) {
-      console.error('Error saving submissions to localStorage:', error);
+    if (supabaseUser) {
+      loadUserSubmissions();
+      loadUserProgress();
+    } else {
+      // Reset state when user logs out
+      setUserSubmissions([]);
+      setCompletedTasks({});
+      setCompletedFirstClick({});
+      setVisitedTasks({});
+      setGlobalAttemptCount(0);
+      setFailAttemptCount(0);
     }
-  }, [userSubmissions]);
+  }, [supabaseUser]);
+
+  const loadUserSubmissions = async () => {
+    if (!supabaseUser) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('task_submissions')
+        .select('*')
+        .eq('user_id', supabaseUser.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading submissions:', error);
+        return;
+      }
+
+      const submissions: TaskSubmission[] = data.map((sub: DBTaskSubmission) => ({
+        taskId: sub.task_id,
+        userId: sub.user_id,
+        status: sub.status as TaskStatus,
+        submittedAt: sub.submitted_at,
+        text: sub.text || undefined,
+        screenshot: sub.screenshot || undefined,
+      }));
+
+      setUserSubmissions(submissions);
+    } catch (error) {
+      console.error('Error in loadUserSubmissions:', error);
+    }
+  };
+
+  const loadUserProgress = async () => {
+    if (!supabaseUser) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', supabaseUser.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error loading progress:', error);
+        return;
+      }
+
+      if (data) {
+        setCompletedTasks(data.completed_tasks || {});
+        setCompletedFirstClick(data.completed_first_click || {});
+        setVisitedTasks(data.visited_tasks || {});
+        setGlobalAttemptCount(data.global_attempt_count || 0);
+        setFailAttemptCount(data.fail_attempt_count || 0);
+      }
+    } catch (error) {
+      console.error('Error in loadUserProgress:', error);
+    }
+  };
+
+  const saveUserProgress = async (updates: Partial<UserProgress>) => {
+    if (!supabaseUser) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: supabaseUser.id,
+          ...updates,
+        });
+
+      if (error) {
+        console.error('Error saving progress:', error);
+      }
+    } catch (error) {
+      console.error('Error in saveUserProgress:', error);
+    }
+  };
 
   const getTaskById = (id: string): Task | undefined => {
     return tasks.find((task) => task.id === id);
@@ -116,20 +152,19 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return userSubmissions.find((submission) => submission.taskId === taskId);
   };
 
-  const submitTask = (
+  const submitTask = async (
     taskId: string,
     data: { screenshot?: string; text?: string },
     onFirstFail?: () => void
   ): Promise<boolean> => {
+    if (!supabaseUser) return false;
+
     return new Promise((resolve) => {
       const failAt = Date.now() + 10000;
-      localStorage.setItem('verificationFailAt', failAt.toString());
-      localStorage.setItem('verifyingTaskId', taskId);
-
       setIsVerifying(true);
       setVerificationCountdown(10);
 
-      const interval = setInterval(() => {
+      const interval = setInterval(async () => {
         const timeLeft = Math.max(0, Math.floor((failAt - Date.now()) / 1000));
         setVerificationCountdown(timeLeft);
 
@@ -137,73 +172,117 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         clearInterval(interval);
         setIsVerifying(false);
-        localStorage.removeItem('verificationFailAt');
 
-        const handleSuccess = () => {
-          const newSubmission: TaskSubmission = {
-            taskId,
-            userId: '0x1234...5678',
-            screenshot: data.screenshot,
-            text: data.text,
-            status: 'Approved',
-            submittedAt: new Date().toISOString(),
-          };
+        const handleSuccess = async () => {
+          try {
+            const { data: submission, error } = await supabase
+              .from('task_submissions')
+              .upsert({
+                user_id: supabaseUser.id,
+                task_id: taskId,
+                status: 'Approved',
+                screenshot: data.screenshot,
+                text: data.text,
+                submitted_at: new Date().toISOString(),
+              })
+              .select()
+              .single();
 
-          setUserSubmissions((prev) => {
-            const exists = prev.some((sub) => sub.taskId === taskId);
-            const newSubmissions = exists
-              ? prev.map((sub) => sub.taskId === taskId ? newSubmission : sub)
-              : [...prev, newSubmission].slice(-MAX_STORED_SUBMISSIONS);
+            if (error) {
+              console.error('Error submitting task:', error);
+              resolve(false);
+              return;
+            }
 
-            setTimeout(() => {
+            // Update local state
+            const newSubmission: TaskSubmission = {
+              taskId: submission.task_id,
+              userId: submission.user_id,
+              status: submission.status as TaskStatus,
+              submittedAt: submission.submitted_at,
+              text: submission.text || undefined,
+              screenshot: submission.screenshot || undefined,
+            };
+
+            setUserSubmissions(prev => {
+              const filtered = prev.filter(sub => sub.taskId !== taskId);
+              return [...filtered, newSubmission];
+            });
+
+            // Update tasks completed count
+            setTimeout(async () => {
               if (!['telegram', 'instagram'].includes(taskId)) {
-                updateTasksCompleted(
-                  newSubmissions.filter((s, index, self) => s.status === 'Approved' && self.findIndex(x => x.taskId === s.taskId) === index).length
-                );
+                const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
+                await updateTasksCompleted(approvedCount);
               }
               resolve(true);
             }, 500);
 
-            return newSubmissions;
-          });
+          } catch (error) {
+            console.error('Error in handleSuccess:', error);
+            resolve(false);
+          }
         };
 
         if (['telegram', 'instagram'].includes(taskId)) {
-          const firstFailKey = 'dashboard_first_fail_done';
-          const alreadyFailed = localStorage.getItem(firstFailKey) === 'true';
+          const alreadyFailed = completedFirstClick[`${taskId}_failed`] || false;
           if (!alreadyFailed) {
-            localStorage.setItem(firstFailKey, 'true');
+            await updateCompletedFirstClick(`${taskId}_failed`, true);
             if (onFirstFail) onFirstFail();
             window.dispatchEvent(new Event('task-verification-failed'));
             resolve(false);
             return;
           }
-          handleSuccess();
+          await handleSuccess();
           return;
         }
 
         if (taskId === 'survey') {
-          handleSuccess();
+          await handleSuccess();
           return;
         }
 
-        const globalAttemptRaw = localStorage.getItem('globalAttemptCount');
-        const globalAttempt = globalAttemptRaw ? parseInt(globalAttemptRaw) : 1;
-
-        if ([1, 4, 5].includes(globalAttempt)) {
-          const updated = failAttemptCount + 1;
-          setFailAttemptCount(updated);
-          localStorage.setItem('failAttemptCount', updated.toString());
-
+        if ([1, 4, 5].includes(globalAttemptCount + 1)) {
+          await incrementFailAttemptCount();
           if (onFirstFail) onFirstFail();
           window.dispatchEvent(new Event('task-verification-failed'));
           resolve(false);
           return;
         }
 
-        handleSuccess();
-      });
+        await handleSuccess();
+      }, 1000);
     });
+  };
+
+  const updateCompletedTasks = async (taskId: string, completed: boolean) => {
+    const newCompletedTasks = { ...completedTasks, [taskId]: completed };
+    setCompletedTasks(newCompletedTasks);
+    await saveUserProgress({ completed_tasks: newCompletedTasks });
+  };
+
+  const updateCompletedFirstClick = async (taskId: string, clicked: boolean) => {
+    const newCompletedFirstClick = { ...completedFirstClick, [taskId]: clicked };
+    setCompletedFirstClick(newCompletedFirstClick);
+    await saveUserProgress({ completed_first_click: newCompletedFirstClick });
+  };
+
+  const updateVisitedTasks = async (taskId: string, visited: boolean) => {
+    const newVisitedTasks = { ...visitedTasks, [taskId]: visited };
+    setVisitedTasks(newVisitedTasks);
+    await saveUserProgress({ visited_tasks: newVisitedTasks });
+  };
+
+  const incrementGlobalAttemptCount = async () => {
+    const newCount = globalAttemptCount + 1;
+    setGlobalAttemptCount(newCount);
+    await saveUserProgress({ global_attempt_count: newCount });
+  };
+
+  const incrementFailAttemptCount = async () => {
+    const newCount = failAttemptCount + 1;
+    setFailAttemptCount(newCount);
+    await saveUserProgress({ fail_attempt_count: newCount });
   };
 
   return (
@@ -211,9 +290,19 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         tasks,
         userSubmissions,
+        completedTasks,
+        completedFirstClick,
+        visitedTasks,
+        globalAttemptCount,
+        failAttemptCount,
         getTaskById,
         getUserTaskSubmission,
         submitTask,
+        updateCompletedTasks,
+        updateCompletedFirstClick,
+        updateVisitedTasks,
+        incrementGlobalAttemptCount,
+        incrementFailAttemptCount,
         isVerifying,
         verificationCountdown,
       }}

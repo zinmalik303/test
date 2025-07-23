@@ -44,26 +44,25 @@ import { useTasks } from '../contexts/TaskContext';
 
 const ExploreTasks = () => {
   const navigate = useNavigate();
-  const { updateUserBalance, updateTasksCompleted } = useAuth();
-  const { tasks, submitTask, userSubmissions } = useTasks();
+  const { updateUserBalance } = useAuth();
+  const { 
+    tasks, 
+    submitTask, 
+    userSubmissions, 
+    visitedTasks,
+    updateVisitedTasks,
+    globalAttemptCount,
+    incrementGlobalAttemptCount
+  } = useTasks();
   const [selectedDifficulty, setSelectedDifficulty] = useState<'Easy' | 'Medium' | 'Hard' | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [globalAttemptCount, setGlobalAttemptCount] = useState(() => {
-  const stored = localStorage.getItem('globalAttemptCount');
-  return stored ? parseInt(stored) : 0;
-});
-
 
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [taskLink, setTaskLink] = useState('');
   const [showFailureNotification, setShowFailureNotification] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
-  const [visitedTasks, setVisitedTasks] = useState<Record<string, boolean>>(() => {
-    const stored = localStorage.getItem('visitedTasks');
-    return stored ? JSON.parse(stored) : {};
-  });
   const [verifyingTasks, setVerifyingTasks] = useState<Record<string, number>>({});
 
  const handleDownloadImage = () => {
@@ -94,10 +93,6 @@ const availableTasks = tasks.filter(task => {
 
 
 
-
-  useEffect(() => {
-    localStorage.setItem('visitedTasks', JSON.stringify(visitedTasks));
-  }, [visitedTasks]);
 
   useEffect(() => {
   // Это перерендерит компонент, если userSubmissions обновились
@@ -135,7 +130,7 @@ const availableTasks = tasks.filter(task => {
 
   const handleVisitSite = (taskId: string, link: string) => {
     window.open(link, '_blank');
-    setVisitedTasks(prev => ({ ...prev, [taskId]: true }));
+    updateVisitedTasks(taskId, true);
   };
 
   const handleVerifyTask = (taskId: string) => {
@@ -179,9 +174,8 @@ const handleSubmitVerification = () => {
 
 
   const handleVerificationComplete = async (taskId: string) => {
+  await incrementGlobalAttemptCount();
   const currentAttempt = globalAttemptCount + 1;
-  setGlobalAttemptCount(currentAttempt);
-  localStorage.setItem('globalAttemptCount', currentAttempt.toString());
 
   // 1-я, 4-я, 5-я попытки — всегда провал
   if ([1, 4, 5].includes(currentAttempt)) {
@@ -195,9 +189,7 @@ const handleSubmitVerification = () => {
   text: 'verified',
 });
 
-const stored = localStorage.getItem('userSubmissions');
-const parsed = stored ? JSON.parse(stored) : [];
-const matched = parsed.find((s: any) => s.taskId === taskId && s.status === 'Approved');
+const matched = userSubmissions.find(s => s.taskId === taskId && s.status === 'Approved');
 
 if (wasSuccessful && matched) {
   const task = tasks.find(t => t.id === taskId);
@@ -205,13 +197,11 @@ if (wasSuccessful && matched) {
     updateUserBalance(task.reward);
   }
 
-  const approvedCount = parsed.filter(
-    (s: any, index: number, self: any[]) =>
+  const approvedCount = userSubmissions.filter(
+    (s, index, self) =>
       s.status === 'Approved' &&
-      self.findIndex((x) => x.taskId === s.taskId) === index
+      self.findIndex(x => x.taskId === s.taskId) === index
   ).length;
-
-  updateTasksCompleted(approvedCount);
 
   setShowSuccessNotification(true);
   setTimeout(() => setShowSuccessNotification(false), 3000);

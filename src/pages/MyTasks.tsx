@@ -6,6 +6,18 @@ import { TaskStatus } from '../types';
 
 const MyTasksPage: React.FC = () => {
   const { tasks, userSubmissions } = useTasks();
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-neon-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
 
   const myTasks = userSubmissions
     .map(submission => {

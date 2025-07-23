@@ -1,94 +1,247 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase, Profile } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
-import { mockUser } from '../data/initialData';
+interface User {
+  id: string;
+  username: string;
+  avatar?: string;
+  balance: number;
+  tasksCompleted: number;
+  totalEarned: number;
+  level: number;
+  referralCode: string;
+  joinedAt: string;
+  congratulated: boolean;
+}
 
-
-
-
-
+interface AuthContextType {
+  user: User | null;
+  supabaseUser: SupabaseUser | null;
+  isConnected: boolean;
+  userWallet: string | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, username?: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  connectWallet: (walletType: string) => Promise<void>;
+  disconnectWallet: () => void;
+  updateUserBalance: (amount: number) => Promise<void>;
+  updateTasksCompleted: (count: number) => Promise<void>;
+  updateProfile: (data: { username?: string; avatar?: string }) => Promise<void>;
+  setUserAsCongratulated: () => Promise<void>;
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userWallet, setUserWallet] = useState<string | null>(null);
 
   useEffect(() => {
-  const storedBalance = parseFloat(localStorage.getItem('user_balance') || '0');
-  const storedTasks = parseInt(localStorage.getItem('tasks_completed') || '0');
-  const storedUsername = localStorage.getItem('username') || 'Web3 User';
-  const storedAvatar = localStorage.getItem('avatar');
-  const joinedAt = localStorage.getItem('joined_at') || new Date().toISOString();
-  const congratulated = localStorage.getItem('congratulated') === 'true';
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSupabaseUser(session?.user ?? null);
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
 
-  const newUser = {
-    ...mockUser,
-    username: storedUsername,
-    avatar: storedAvatar,
-    balance: storedBalance,
-    totalEarned: storedBalance,
-    tasksCompleted: storedTasks,
-    joinedAt,
-    congratulated
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setSupabaseUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error loading profile:', error);
+        return;
+      }
+
+      if (profile) {
+        setUser({
+          id: profile.id,
+          username: profile.username,
+          avatar: profile.avatar,
+          balance: parseFloat(profile.balance.toString()),
+          tasksCompleted: profile.tasks_completed,
+          totalEarned: parseFloat(profile.total_earned.toString()),
+          level: profile.level,
+          referralCode: profile.referral_code,
+          joinedAt: profile.created_at,
+          congratulated: profile.congratulated,
+        });
+      }
+    } catch (error) {
+      console.error('Error in loadUserProfile:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  setUser(newUser);
-  localStorage.setItem('mock_user_initialized', 'true');
-}, []);
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+  };
 
+  const signUp = async (email: string, password: string, username = 'Web3 User') => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+        },
+      },
+    });
+    if (error) throw error;
+  };
 
- 
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setUser(null);
+    setUserWallet(null);
+  };
 
-  const updateUserBalance = (amount: number) => {
-  setUser(prev => {
-    if (!prev) return null;
-    const newUser = {
+  const connectWallet = async (walletType: string) => {
+    // Mock wallet connection - in real app, integrate with actual wallet
+    const mockWallet = '0x1234567890abcdef1234567890abcdef12345678';
+    setUserWallet(mockWallet);
+    
+    // Create account with mock email
+    const mockEmail = `${mockWallet}@wallet.local`;
+    const mockPassword = 'wallet-password-123';
+    
+    try {
+      await signUp(mockEmail, mockPassword, 'Web3 User');
+    } catch (error) {
+      // If user already exists, sign in
+      await signIn(mockEmail, mockPassword);
+    }
+  };
+
+  const disconnectWallet = () => {
+    setUserWallet(null);
+    signOut();
+  };
+
+  const updateUserBalance = async (amount: number) => {
+    if (!supabaseUser || !user) return;
+
+    const newBalance = user.balance + amount;
+    const newTotalEarned = user.totalEarned + amount;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        balance: newBalance,
+        total_earned: newTotalEarned,
+      })
+      .eq('id', supabaseUser.id);
+
+    if (error) {
+      console.error('Error updating balance:', error);
+      return;
+    }
+
+    setUser(prev => prev ? {
       ...prev,
-      balance: prev.balance + amount,
-      totalEarned: prev.totalEarned + amount
-    };
-    localStorage.setItem('user_balance', newUser.balance.toString());
-    return newUser;
-  });
-};
-
-
-  const updateTasksCompleted = (count: number) => {
-    setUser(prev => {
-      if (!prev) return null;
-      const newUser = {
-        ...prev,
-        tasksCompleted: count
-      };
-      localStorage.setItem('tasks_completed', count.toString());
-      return newUser;
-    });
+      balance: newBalance,
+      totalEarned: newTotalEarned,
+    } : null);
   };
 
-  const updateProfile = (data: { username?: string; avatar?: string }) => {
-    setUser(prev => {
-      if (!prev) return null;
-      const newUser = {
-        ...prev,
-        ...data
-      };
-      if (data.username) localStorage.setItem('username', data.username);
-      if (data.avatar) localStorage.setItem('avatar', data.avatar);
-      return newUser;
-    });
-  };
-  const setUserAsCongratulated = () => {
-  setUser(prev => {
-    if (!prev) return null;
-    return { ...prev, congratulated: true };
-  });
-};
+  const updateTasksCompleted = async (count: number) => {
+    if (!supabaseUser || !user) return;
 
+    const { error } = await supabase
+      .from('profiles')
+      .update({ tasks_completed: count })
+      .eq('id', supabaseUser.id);
+
+    if (error) {
+      console.error('Error updating tasks completed:', error);
+      return;
+    }
+
+    setUser(prev => prev ? { ...prev, tasksCompleted: count } : null);
+  };
+
+  const updateProfile = async (data: { username?: string; avatar?: string }) => {
+    if (!supabaseUser || !user) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(data)
+      .eq('id', supabaseUser.id);
+
+    if (error) {
+      console.error('Error updating profile:', error);
+      return;
+    }
+
+    setUser(prev => prev ? { ...prev, ...data } : null);
+  };
+
+  const setUserAsCongratulated = async () => {
+    if (!supabaseUser || !user) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        congratulated: true,
+        has_given_reward: true 
+      })
+      .eq('id', supabaseUser.id);
+
+    if (error) {
+      console.error('Error setting congratulated:', error);
+      return;
+    }
+
+    setUser(prev => prev ? { ...prev, congratulated: true } : null);
+  };
+
+  const isConnected = !!supabaseUser && !!userWallet;
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        supabaseUser,
+        isConnected,
+        userWallet,
+        loading,
+        signIn,
+        signUp,
+        signOut,
+        connectWallet,
+        disconnectWallet,
         updateUserBalance,
         updateTasksCompleted,
         updateProfile,

@@ -42,7 +42,28 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
 
 const Dashboard = () => {
-  const { user, updateUserBalance, updateTasksCompleted, setUserAsCongratulated } = useAuth();
+  const { user, updateUserBalance, setUserAsCongratulated, loading } = useAuth();
+  const { 
+    submitTask, 
+    isVerifying, 
+    verificationCountdown, 
+    completedTasks,
+    updateCompletedTasks,
+    completedFirstClick,
+    updateCompletedFirstClick
+  } = useTasks();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-neon-green border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
   console.log("USER DATA:", user);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,27 +81,13 @@ useEffect(() => {
   const [showFirstAttemptFailModal, setShowFirstAttemptFailModal] = useState(false);
 
 
-  const { tasks, submitTask, isVerifying, verificationCountdown } = useTasks();
   const { scrollYProgress } = useScroll();
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [currentTask, setCurrentTask] = useState<'telegram' | 'instagram' | 'survey' | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [username, setUsername] = useState('');
-  const [completedFirstClick, setCompletedFirstClick] = useState({
-    telegram: false,
-    instagram: false,
-    survey: false
-  });
-  const [completedTasks, setCompletedTasks] = useState(() => {
-    
-  const saved = localStorage.getItem('completedTasks');
-  return saved ? JSON.parse(saved) : {
-    telegram: false,
-    instagram: false,
-    survey: false
-  };
-});
+  
 
 
 const [hasGivenReward, setHasGivenReward] = useState(false);
@@ -133,14 +140,6 @@ useEffect(() => {
 
 
 
-  useEffect(() => {
-    localStorage.setItem('completedFirstClick', JSON.stringify(completedFirstClick));
-  }, [completedFirstClick]);
-
-  useEffect(() => {
-    localStorage.setItem('completedTasks', JSON.stringify(completedTasks));
-  }, [completedTasks]);
-
   const surveyQuestions = [
     {
       question: "How did you hear about Sonavo?",
@@ -181,7 +180,7 @@ useEffect(() => {
   }
 
   if (!completedFirstClick[task]) {
-    setCompletedFirstClick(prev => ({ ...prev, [task]: true }));
+    await updateCompletedFirstClick(task, true);
     
     if (task === 'telegram') {
       window.open('https://t.me/+atUr8L_y6nJhMWVi', '_blank');
@@ -225,10 +224,7 @@ useEffect(() => {
 
     if (!wasSuccessful) return; // ❗ Если провал — не засчитываем задачу
 
-    setCompletedTasks(prev => ({
-      ...prev,
-      [currentTask]: true
-    }));
+    await updateCompletedTasks(currentTask, true);
 
     setShowSuccessNotification(true);
     setTimeout(() => setShowSuccessNotification(false), 3000);
@@ -251,16 +247,7 @@ useEffect(() => {
     if (currentSurveyStep < surveyQuestions.length - 1) {
       setCurrentSurveyStep(prev => prev + 1);
     } else {
-      setCompletedTasks(prev => {
-  const newTasks = {
-    ...prev,
-    survey: true
-  };
-
-
-
-  return newTasks;
-});
+      await updateCompletedTasks('survey', true);
 
       setShowSurveyModal(false);
     }
