@@ -254,34 +254,21 @@ useEffect(() => {
 
 
  const handleUsernameSubmit = async () => {
-  if (!currentTask || !username.trim()) return;
+    console.log('handleUsernameSubmit called for:', currentTask, 'username:', username);
+    if (!currentTask || !username.trim()) return;
 
-  setShowUsernameModal(false);
-  
-  // Запускаем таймер проверки
-  setVerifyingTasks(prev => ({
-    ...prev,
-    [currentTask]: 10
-  }));
-
-  try {
-    const wasSuccessful = await submitTask(currentTask, { text: username });
+    setShowUsernameModal(false);
     
-    if (wasSuccessful) {
-      await updateCompletedTasks(currentTask, true);
-      await refreshData();
+    // Запускаем таймер проверки
+    console.log('Starting timer for:', currentTask);
+    setVerifyingTasks(prev => ({
+      ...prev,
+      [currentTask]: 10
+    }));
 
-      setShowSuccessNotification(true);
-      setTimeout(() => setShowSuccessNotification(false), 3000);
-    }
-  } catch (error) {
-    setShowFailureNotification(true);
-    setTimeout(() => setShowFailureNotification(false), 3000);
-  }
-
-  setUsername('');
-  setCurrentTask(null);
-};
+    setUsername('');
+    setCurrentTask(null);
+  };
 
   const handleSurveyAnswer = async (answer: string) => {
     const newAnswers = [...surveyAnswers, answer];
