@@ -78,19 +78,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
           id: profile.id,
           username: profile.username,
-          avatar: profile.avatar,
-          balance: parseFloat(profile.balance.toString()),
-          tasksCompleted: profile.tasks_completed,
-          totalEarned: parseFloat(profile.total_earned.toString()),
-          level: profile.level,
-          referralCode: profile.referral_code,
+          avatar: profile.avatar || undefined,
+          balance: parseFloat(profile.balance?.toString() || '0'),
+          tasksCompleted: profile.tasks_completed || 0,
+          totalEarned: parseFloat(profile.total_earned?.toString() || '0'),
+          level: profile.level || 1,
+          referralCode: profile.referral_code || '',
           joinedAt: profile.created_at,
-          congratulated: profile.congratulated,
-          hasGivenReward: profile.has_given_reward,
+          congratulated: profile.congratulated || false,
+          hasGivenReward: profile.has_given_reward || false,
         });
         
         // Set wallet address from user ID (mock wallet connection)
         setUserWallet(userId.slice(0, 6) + '...' + userId.slice(-4));
+      } else {
+        // Create default profile if none exists
+        const defaultProfile = {
+          username: 'Web3 User',
+          balance: 0,
+          tasks_completed: 0,
+          total_earned: 0,
+          level: 1,
+          congratulated: false,
+          has_given_reward: false,
+        };
+        
+        const success = await dbHelpers.updateProfile(userId, defaultProfile);
+        if (success) {
+          setUser({
+            id: userId,
+            username: 'Web3 User',
+            avatar: undefined,
+            balance: 0,
+            tasksCompleted: 0,
+            totalEarned: 0,
+            level: 1,
+            referralCode: '',
+            joinedAt: new Date().toISOString(),
+            congratulated: false,
+            hasGivenReward: false,
+          });
+          setUserWallet(userId.slice(0, 6) + '...' + userId.slice(-4));
+        }
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
