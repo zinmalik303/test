@@ -91,6 +91,35 @@ useEffect(() => {
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [verifyingTasks, setVerifyingTasks] = useState<Record<string, number>>({});
 
+  // Timer effect for dashboard tasks
+  useEffect(() => {
+    const intervals: NodeJS.Timeout[] = [];
+
+    Object.entries(verifyingTasks).forEach(([taskId, countdown]) => {
+      if (countdown > 0) {
+        const interval = setInterval(() => {
+          setVerifyingTasks(prev => {
+            const newCountdown = prev[taskId] - 1;
+            if (newCountdown <= 0) {
+              const updated = { ...prev };
+              delete updated[taskId];
+              // Trigger verification complete
+              setTimeout(() => handleVerificationComplete(taskId), 100);
+              return updated;
+            }
+            return {
+              ...prev,
+              [taskId]: newCountdown
+            };
+          });
+        }, 1000);
+        intervals.push(interval);
+      }
+    });
+
+    return () => intervals.forEach(clearInterval);
+  }, [verifyingTasks]);
+
   const { scrollYProgress } = useScroll();
 
   const surveyQuestions = [
