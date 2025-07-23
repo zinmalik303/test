@@ -167,6 +167,7 @@ useEffect(() => {
   const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
 
   const handleTaskClick = (task: 'telegram' | 'instagram' | 'survey') => {
+  const handleTaskClick = async (task: 'telegram' | 'instagram' | 'survey') => {
   if (isVerifying) return;
 
   // СБРОС username перед открытием нового задания
