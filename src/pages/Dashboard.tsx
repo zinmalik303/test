@@ -91,6 +91,36 @@ useEffect(() => {
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [verifyingTasks, setVerifyingTasks] = useState<Record<string, number>>({});
 
+  const handleVerificationComplete = async (taskId: string) => {
+    const alreadyFailed = completedFirstClick[`${taskId}_failed`] || false;
+    
+    if (!alreadyFailed) {
+      // Первая попытка - всегда провал (фейк проверка)
+      await updateCompletedFirstClick(`${taskId}_failed`, true);
+      setShowFirstAttemptFailModal(true);
+      return;
+    }
+    
+    // Вторая попытка - успех
+    try {
+      const wasSuccessful = await submitTask(taskId, { text: 'verified' });
+      
+      if (wasSuccessful) {
+        await updateCompletedTasks(taskId, true);
+        await refreshData();
+        
+        setShowSuccessNotification(true);
+        setTimeout(() => setShowSuccessNotification(false), 3000);
+      } else {
+        setShowFailureNotification(true);
+        setTimeout(() => setShowFailureNotification(false), 3000);
+      }
+    } catch (error) {
+      setShowFailureNotification(true);
+      setTimeout(() => setShowFailureNotification(false), 3000);
+    }
+  };
+
   // Timer effect for dashboard tasks
   useEffect(() => {
     const intervals: NodeJS.Timeout[] = [];
@@ -103,6 +133,8 @@ useEffect(() => {
             if (newCountdown <= 0) {
               const updated = { ...prev };
               delete updated[taskId];
+              // Вызываем проверку когда таймер заканчивается
+              setTimeout(() => handleVerificationComplete(taskId), 100);
               return updated;
             }
             return {
