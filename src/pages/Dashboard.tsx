@@ -111,6 +111,7 @@ useEffect(() => {
     // Вторая попытка - успех
     console.log('Second attempt - completing task');
     try {
+      console.log('Calling submitTask with:', { taskId, data: { text: 'verified', screenshot: 'verified' } });
       const wasSuccessful = await submitTask(taskId, { 
         text: 'verified',
         screenshot: 'verified' 
@@ -119,12 +120,13 @@ useEffect(() => {
       console.log('submitTask result:', wasSuccessful);
       
       if (wasSuccessful) {
+        console.log('Task successful, updating completed tasks');
         await updateCompletedTasks(taskId, true);
         
         // Обновляем счетчик выполненных заданий
         const newCount = (user?.tasksCompleted || 0) + 1;
         console.log('Updating tasks completed to:', newCount);
-        await updateTasksCompleted(newCount);
+        // await updateTasksCompleted(newCount); // Это должно происходить в TaskContext
         
         await refreshData();
         

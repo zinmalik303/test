@@ -130,6 +130,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     data: { screenshot?: string; text?: string },
     onFirstFail?: () => void
   ): Promise<boolean> => {
+    console.log('TaskContext submitTask called with:', { taskId, data, supabaseUser: !!supabaseUser });
     if (!supabaseUser) return false;
 
     // Special handling for telegram and instagram tasks
@@ -153,11 +154,13 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Second attempt - success
       console.log('TaskContext submitTask - Second attempt, completing task');
       try {
+        console.log('Calling dbHelpers.submitTask with:', { userId: supabaseUser.id, taskId, data: { ...data, status: 'Approved' } });
         const submission = await dbHelpers.submitTask(supabaseUser.id, taskId, {
           ...data,
           status: 'Approved',
         });
 
+        console.log('dbHelpers.submitTask returned:', submission);
         if (!submission) {
           console.log('TaskContext submitTask - No submission returned from dbHelpers');
           return false;
@@ -175,6 +178,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           screenshot: submission.screenshot || undefined,
         };
 
+        console.log('Adding new submission to local state:', newSubmission);
         setUserSubmissions(prev => {
           const filtered = prev.filter(sub => sub.taskId !== taskId);
           return [...filtered, newSubmission];
