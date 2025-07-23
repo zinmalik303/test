@@ -103,8 +103,6 @@ useEffect(() => {
             if (newCountdown <= 0) {
               const updated = { ...prev };
               delete updated[taskId];
-              // Trigger verification complete
-              setTimeout(() => handleVerificationComplete(taskId), 100);
               return updated;
             }
             return {
