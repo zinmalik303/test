@@ -92,11 +92,6 @@ useEffect(() => {
 
   const { scrollYProgress } = useScroll();
 
-  // Check for reward eligibility when completed tasks change
-  useEffect(() => {
-    checkAndRewardIfEligible();
-  }, [completedTasks, user]);
-
   const surveyQuestions = [
     {
       question: "How did you hear about Sonavo?",
@@ -122,6 +117,16 @@ useEffect(() => {
 
   const backgroundY = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
   const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+
+  // Check if all 3 dashboard tasks are completed
+  const hasAllDashboardTasksCompleted = completedTasks.telegram && completedTasks.instagram && completedTasks.survey;
+
+  // Check for reward eligibility when completed tasks change
+  useEffect(() => {
+    if (hasAllDashboardTasksCompleted && !user?.congratulated && !user?.hasGivenReward) {
+      checkAndRewardIfEligible();
+    }
+  }, [hasAllDashboardTasksCompleted, user?.congratulated, user?.hasGivenReward]);
 
   const handleTaskClick = async (task: 'telegram' | 'instagram' | 'survey') => {
   if (isVerifying) return;
@@ -151,12 +156,7 @@ useEffect(() => {
 };
 
  const checkAndRewardIfEligible = async () => {
-  if (
-  Object.values(completedTasks).every(task => task) &&
-  !user?.congratulated &&
-  !user?.hasGivenReward
-) {
-
+  if (hasAllDashboardTasksCompleted && !user?.congratulated && !user?.hasGivenReward) {
     await updateUserBalance(10);
     await setUserAsCongratulated();
 
@@ -281,8 +281,6 @@ useEffect(() => {
     );
   };
 
- const hasAllTasksCompleted = Object.values(completedTasks).every(Boolean);
-
 
   return (
     <div className="relative min-h-screen">
@@ -325,7 +323,7 @@ useEffect(() => {
             </div>
             
             <div className="flex items-center gap-4">
-              {hasAllTasksCompleted && (
+              {hasAllDashboardTasksCompleted && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -353,12 +351,11 @@ useEffect(() => {
           </div>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-         className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-12"
-
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-12"
         >
           <div className="relative overflow-hidden rounded-2xl bg-[#1A2421] p-6 border border-[#2A3A35] group hover:border-[#00FFB2]/30 transition-all duration-300">
             <div className="absolute -right-8 -top-8 h-32 w-32 bg-[#00FFB2]/5 rounded-full blur-2xl group-hover:bg-[#00FFB2]/10 transition-all duration-300"></div>
@@ -369,7 +366,6 @@ useEffect(() => {
               <div>
                 <p className="text-sm text-gray-400">Tasks Completed</p>
                 <p className="text-2xl font-bold">{user?.tasksCompleted ?? 0}</p>
-
               </div>
             </div>
           </div>
@@ -383,7 +379,6 @@ useEffect(() => {
               <div>
                 <p className="text-sm text-gray-400">Current Balance</p>
                 <p className="text-2xl font-bold">${user?.balance?.toFixed(2) ?? "0.00"}</p>
-
               </div>
             </div>
           </div>
@@ -397,7 +392,6 @@ useEffect(() => {
               <div>
                 <p className="text-sm text-gray-400">Total Earned</p>
                 <p className="text-2xl font-bold">${user?.totalEarned?.toFixed(2) ?? "0.00"}</p>
-
               </div>
             </div>
           </div>
@@ -416,26 +410,25 @@ useEffect(() => {
           </div>
         </motion.div>
 
-        
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="mb-12"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold">Earn Your First $10</h2>
-                <p className="text-gray-400 mt-1">Complete these 3 simple tasks below and get your first reward. It takes less than 5 minutes.</p>
-              </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mb-12"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Earn Your First $10</h2>
+              <p className="text-gray-400 mt-1">Complete these 3 simple tasks below and get your first reward. It takes less than 5 minutes.</p>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="relative group overflow-hidden">
-                <div className="card bg-gradient-to-br from-blue-900/20 to-dark-gray border-blue-800/50 hover:border-blue-500/50 min-h-[240px]">
-                  <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-blue-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
-                  <div className="relative h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="relative group overflow-hidden">
+              <div className="card bg-gradient-to-br from-blue-900/20 to-dark-gray border-blue-800/50 hover:border-blue-500/50 min-h-[240px]">
+                <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-blue-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
+                <div className="relative h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
   <div className="flex items-center gap-3">
     <div className="bg-blue-900/30 rounded-xl p-2">
       <MessageCircle className="h-5 w-5 text-blue-400" />
@@ -443,7 +436,7 @@ useEffect(() => {
     <span className="text-blue-400 font-medium">Step 1</span>
   </div>
 
-  <a
+                    <a
   href="https://t.me/+atUr8L_y6nJhMWVi"
   target="_blank"
   rel="noopener noreferrer"
@@ -451,26 +444,22 @@ useEffect(() => {
 >
   <ExternalLink className="w-5 h-5" />
 </a>
+                  </div>
 
-
-</div>
-
-                    
-                    <h3 className="font-bold text-lg mb-2">Join Our Telegram</h3>
-                    <p className="text-gray-400 text-sm mb-4">Join the Sonavo community on Telegram to stay updated.</p>
-                    
-                    <div className="mt-auto">
-                      {renderTaskButton('telegram')}
-                      
-                    </div>
+                  <h3 className="font-bold text-lg mb-2">Join Our Telegram</h3>
+                  <p className="text-gray-400 text-sm mb-4">Join the Sonavo community on Telegram to stay updated.</p>
+                  
+                  <div className="mt-auto">
+                    {renderTaskButton('telegram')}
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="relative group overflow-hidden">
-                <div className="card bg-gradient-to-br from-purple-900/20 to-dark-gray border-purple-800/50 hover:border-purple-500/50 min-h-[240px]">
-                  <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-purple-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
-                  <div className="relative h-full flex flex-col">
+            <div className="relative group overflow-hidden">
+              <div className="card bg-gradient-to-br from-purple-900/20 to-dark-gray border-purple-800/50 hover:border-purple-500/50 min-h-[240px]">
+                <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-purple-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
+                <div className="relative h-full flex flex-col">
   <a
     href="https://www.instagram.com/"
     target="_blank"
@@ -480,72 +469,73 @@ useEffect(() => {
     <ExternalLink className="w-5 h-5" />
   </a>
 
-                    
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="bg-purple-900/30 rounded-xl p-2">
-                        <Instagram className="h-5 w-5 text-purple-400" />
-                      </div>
-                      <span className="text-purple-400 font-medium">Step 2</span>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-purple-900/30 rounded-xl p-2">
+                      <Instagram className="h-5 w-5 text-purple-400" />
                     </div>
-                    
-                    <h3 className="font-bold text-lg mb-2">Follow Us on Instagram</h3>
-                    <p className="text-gray-400 text-sm mb-4">Follow us on Instagram for updates, highlights, and tips.</p>
-                    
-                    <div className="mt-auto">
-                      {renderTaskButton('instagram')}
-                    </div>
+                    <span className="text-purple-400 font-medium">Step 2</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="relative group overflow-hidden">
-                <div className="card bg-gradient-to-br from-green-900/20 to-dark-gray border-green-800/50 hover:border-green-500/50 min-h-[240px]">
-                  <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-green-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
-                  <div className="relative h-full flex flex-col">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="bg-green-900/30 rounded-xl p-2">
-                        <CheckCircle className="h-5 w-5 text-green-400" />
-                      </div>
-                      <span className="text-green-400 font-medium">Step 3</span>
-                    </div>
-                    
-                    <h3 className="font-bold text-lg mb-2">Answer 5 Quick Questions</h3>
-                    <p className="text-gray-400 text-sm mb-4">Help us understand you better. Answer a few questions.</p>
-                    
-                    <div className="mt-auto">
-                      {renderTaskButton('survey')}
-                    </div>
+                  
+                  <h3 className="font-bold text-lg mb-2">Follow Us on Instagram</h3>
+                  <p className="text-gray-400 text-sm mb-4">Follow us on Instagram for updates, highlights, and tips.</p>
+                  
+                  <div className="mt-auto">
+                    {renderTaskButton('instagram')}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 text-center">
-              <Link
-                to="/explore"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-all duration-300 shadow-lg"
-              >
-                Start Earning
-              </Link>
+            <div className="relative group overflow-hidden">
+              <div className="card bg-gradient-to-br from-green-900/20 to-dark-gray border-green-800/50 hover:border-green-500/50 min-h-[240px]">
+                <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-green-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
+                <div className="relative h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-green-900/30 rounded-xl p-2">
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    <span className="text-green-400 font-medium">Step 3</span>
+                  </div>
+                  
+                  <h3 className="font-bold text-lg mb-2">Answer 5 Quick Questions</h3>
+                  <p className="text-gray-400 text-sm mb-4">Help us understand you better. Answer a few questions.</p>
+                  
+                  <div className="mt-auto">
+                    {renderTaskButton('survey')}
+                  </div>
+                </div>
+              </div>
             </div>
-              <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="mt-20 mb-24"
-          >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#009dff]/5 via-[#2d6bff]/5 to-[#6600ff]/5 rounded-2xl blur-xl"></div>
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              to="/explore"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-all duration-300 shadow-lg"
+            >
+              Start Earning
+            </Link>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-20 mb-24"
+        >
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#009dff]/5 via-[#2d6bff]/5 to-[#6600ff]/5 rounded-2xl blur-xl"></div>
+            
+            <div className="relative p-0">
+              <div className="flex items-center gap-3 mb-8">
+                <Rocket className="h-6 w-6 text-[#009dff]" />
+                <h2 className="text-2xl font-bold text-white">
+                  Coming Soon
+                </h2>
+              </div>
               
-              <div className="relative p-0">
-                <div className="flex items-center gap-3 mb-8">
-                  <Rocket className="h-6 w-6 text-[#009dff]" />
-                  <h2 className="text-2xl font-bold text-white">
-                    Coming Soon
-                  </h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
   {/* Leaderboard */}
   <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-900/20 to-[#111827] p-6 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300">
     <div className="absolute -right-8 -top-8 h-32 w-32 bg-gradient-to-br from-purple-500/20 to-transparent blur-2xl group-hover:animate-pulse"></div>
@@ -606,22 +596,19 @@ useEffect(() => {
     <p className="text-sm text-gray-400">Earn tokens while playing exciting Web3 games and challenges.</p>
   </div>
 </div>
-
-
-                <div className="mt-8 text-center">
-                  <Link
-                    to="/explore"
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-[#009dff] to-[#6600ff] text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-all duration-300"
-                  >
-                    Explore Available Tasks
-                    <ArrowRight className="w-5 h-5" />
-                  </Link>
-                </div>
+              
+              <div className="mt-8 text-center">
+                <Link
+                  to="/explore"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-[#009dff] to-[#6600ff] text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition-all duration-300"
+                >
+                  Explore Available Tasks
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
               </div>
             </div>
-          </motion.div>
-          </motion.div>
-
+          </div>
+        </motion.div>
       </div>
 
       {showSurveyModal && (
@@ -798,7 +785,6 @@ useEffect(() => {
     </motion.div>
   </div>
 )}
-
     </div>
   );
 };
