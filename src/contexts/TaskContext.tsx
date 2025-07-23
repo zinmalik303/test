@@ -133,7 +133,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabaseUser) return false;
 
     return new Promise((resolve) => {
-      const failAt = Date.now() + 10000;
+      const failAt = Date.now() + 10000; // 10 секунд
       setIsVerifying(true);
       setVerificationCountdown(10);
 

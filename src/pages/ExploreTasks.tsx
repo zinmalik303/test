@@ -157,7 +157,7 @@ const handleSubmitVerification = () => {
   setShowVerificationModal(false);
   setVerifyingTasks(prev => ({
     ...prev,
-    [currentTaskId]: 20
+    [currentTaskId]: 10
   }));
   setScreenshot(null);
   setTaskLink('');
@@ -265,7 +265,7 @@ const handleSubmitVerification = () => {
   const renderTaskButton = (task: typeof tasks[0]) => {
     const isVerifying = task.id in verifyingTasks;
     const countdown = verifyingTasks[task.id];
-    const maxTime = 20; // или сколько у тебя стоит
+    const maxTime = 10;
 const progress = isVerifying ? ((maxTime - countdown) / maxTime) * 100 : 0;
 
 
