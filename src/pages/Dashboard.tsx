@@ -238,7 +238,7 @@ useEffect(() => {
   setCurrentTask(null);
 };
 
-
+  const handleSurveyAnswer = async (answer: string) => {
 
   const handleSurveyAnswer = async (answer: string) => {
     const newAnswers = [...surveyAnswers, answer];
