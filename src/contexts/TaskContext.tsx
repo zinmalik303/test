@@ -193,7 +193,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!alreadyFailed) {
             await updateCompletedFirstClick(`${taskId}_failed`, true);
             if (onFirstFail) onFirstFail();
-            window.dispatchEvent(new Event('task-verification-failed'));
+            setShowFirstAttemptFailModal(true);
             resolve(false);
             return;
           }

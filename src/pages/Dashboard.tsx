@@ -89,6 +89,7 @@ useEffect(() => {
   const [surveyAnswers, setSurveyAnswers] = useState<string[]>([]);
   const [showFailureNotification, setShowFailureNotification] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+  const [verifyingTasks, setVerifyingTasks] = useState<Record<string, number>>({});
 
   const { scrollYProgress } = useScroll();
 
@@ -171,23 +172,26 @@ useEffect(() => {
   if (!currentTask || !username.trim()) return;
 
   setShowUsernameModal(false);
+  
+  // Запускаем таймер проверки
+  setVerifyingTasks(prev => ({
+    ...prev,
+    [currentTask]: 10
+  }));
 
   try {
-    const wasSuccessful = await submitTask(currentTask, { text: username }, () => {
-      setShowFirstAttemptFailModal(true);
-    });
+    const wasSuccessful = await submitTask(currentTask, { text: username });
+    
+    if (wasSuccessful) {
+      await updateCompletedTasks(currentTask, true);
+      await refreshData();
 
-    if (!wasSuccessful) return; // ❗ Если провал — не засчитываем задачу
-
-    await updateCompletedTasks(currentTask, true);
-    await refreshData();
-
-    setShowSuccessNotification(true);
-    setTimeout(() => setShowSuccessNotification(false), 3000);
+      setShowSuccessNotification(true);
+      setTimeout(() => setShowSuccessNotification(false), 3000);
+    }
   } catch (error) {
     setShowFailureNotification(true);
     setTimeout(() => setShowFailureNotification(false), 3000);
-    setCompletedFirstClick(prev => ({ ...prev, [currentTask]: false }));
   }
 
   setUsername('');
