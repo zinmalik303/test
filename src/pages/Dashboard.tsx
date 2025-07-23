@@ -239,8 +239,6 @@ useEffect(() => {
 };
 
   const handleSurveyAnswer = async (answer: string) => {
-
-  const handleSurveyAnswer = async (answer: string) => {
     const newAnswers = [...surveyAnswers, answer];
     setSurveyAnswers(newAnswers);
     
@@ -571,6 +569,7 @@ useEffect(() => {
               >
                 Start Earning
               </Link>
+            </div>
               <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -663,7 +662,6 @@ useEffect(() => {
               </div>
             </div>
           </motion.div>
-            </div>
           </motion.div>
 
       </div>
