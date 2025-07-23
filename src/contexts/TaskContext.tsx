@@ -132,6 +132,55 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<boolean> => {
     if (!supabaseUser) return false;
 
+    // Special handling for telegram and instagram tasks
+    if (['telegram', 'instagram'].includes(taskId)) {
+      const failedKey = `${taskId}_failed`;
+      const alreadyFailed = completedFirstClick[failedKey] || false;
+      
+      if (!alreadyFailed) {
+        // First attempt - always fail
+        await updateCompletedFirstClick(failedKey, true);
+        if (onFirstFail) onFirstFail();
+        return false;
+      }
+      
+      // Second attempt - success
+      try {
+        const submission = await dbHelpers.submitTask(supabaseUser.id, taskId, {
+          ...data,
+          status: 'Approved',
+        });
+
+        if (!submission) {
+          return false;
+        }
+
+        // Update local state
+        const newSubmission: TaskSubmission = {
+          taskId: submission.task_id,
+          userId: submission.user_id,
+          status: submission.status as TaskStatus,
+          submittedAt: submission.submitted_at,
+          text: submission.text || undefined,
+          screenshot: submission.screenshot || undefined,
+        };
+
+        setUserSubmissions(prev => {
+          const filtered = prev.filter(sub => sub.taskId !== taskId);
+          return [...filtered, newSubmission];
+        });
+
+        // Update tasks completed count
+        const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
+        await updateTasksCompleted(approvedCount);
+
+        return true;
+      } catch (error) {
+        console.error('Error submitting telegram/instagram task:', error);
+        return false;
+      }
+    }
+
     return new Promise((resolve) => {
       const failAt = Date.now() + 10000; // 10 секунд
       setIsVerifying(true);
@@ -186,20 +235,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             resolve(false);
           }
         };
-
-        // Handle special task logic
-        if (['telegram', 'instagram'].includes(taskId)) {
-          const alreadyFailed = completedFirstClick[`${taskId}_failed`] || false;
-          if (!alreadyFailed) {
-            await updateCompletedFirstClick(`${taskId}_failed`, true);
-            if (onFirstFail) onFirstFail();
-            setShowFirstAttemptFailModal(true);
-            resolve(false);
-            return;
-          }
-          await handleSuccess();
-          return;
-        }
 
         if (taskId === 'survey') {
           await handleSuccess();
