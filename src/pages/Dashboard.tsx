@@ -166,7 +166,6 @@ useEffect(() => {
   const backgroundY = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
   const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
 
-  const handleTaskClick = (task: 'telegram' | 'instagram' | 'survey') => {
   const handleTaskClick = async (task: 'telegram' | 'instagram' | 'survey') => {
   if (isVerifying) return;
 
@@ -241,7 +240,7 @@ useEffect(() => {
 
 
 
-  const handleSurveyAnswer = (answer: string) => {
+  const handleSurveyAnswer = async (answer: string) => {
     const newAnswers = [...surveyAnswers, answer];
     setSurveyAnswers(newAnswers);
     
@@ -832,7 +831,7 @@ useEffect(() => {
         <h3 className="text-lg font-semibold">Congratulations!</h3>
       </div>
       <p className="text-gray-300 mb-6">
-        You’ve completed your first 3 tasks and earned <span className="text-green-400 font-semibold">$10</span>!
+        You've completed your first 3 tasks and earned <span className="text-green-400 font-semibold">$10</span>!
       </p>
       <button
         onClick={() => setShowCongratsModal(false)}
