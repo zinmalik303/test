@@ -61,6 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(session.user.id);
       } else {
         setUser(null);
+        setUserWallet(null);
         setLoading(false);
       }
     });
@@ -87,6 +88,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           congratulated: profile.congratulated,
           hasGivenReward: profile.has_given_reward,
         });
+        
+        // Set wallet address from user ID (mock wallet connection)
+        setUserWallet(userId.slice(0, 6) + '...' + userId.slice(-4));
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
@@ -130,9 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const connectWallet = async (walletType: string) => {
-    // Mock wallet connection - in real app, integrate with actual wallet
-    const mockWallet = '0x1234567890abcdef1234567890abcdef12345678';
-    setUserWallet(mockWallet);
+    // Generate unique wallet address
+    const mockWallet = '0x' + Math.random().toString(16).substr(2, 40);
     
     // Create account with mock email
     const mockEmail = `${mockWallet}@wallet.local`;
@@ -142,12 +145,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signUp(mockEmail, mockPassword, 'Web3 User');
     } catch (error) {
       // If user already exists, sign in
-      await signIn(mockEmail, mockPassword);
+      try {
+        await signIn(mockEmail, mockPassword);
+      } catch (signInError) {
+        console.error('Error connecting wallet:', signInError);
+        throw signInError;
+      }
     }
   };
 
   const disconnectWallet = () => {
-    setUserWallet(null);
     signOut();
   };
 
@@ -202,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isConnected = !!supabaseUser && !!userWallet;
+  const isConnected = !!supabaseUser;
 
   return (
     <AuthContext.Provider

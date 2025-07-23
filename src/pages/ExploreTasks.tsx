@@ -165,36 +165,36 @@ const handleSubmitVerification = () => {
 
 
   const handleVerificationComplete = async (taskId: string) => {
-  await incrementGlobalAttemptCount();
-  const currentAttempt = globalAttemptCount + 1;
+    await incrementGlobalAttemptCount();
+    const currentAttempt = globalAttemptCount + 1;
 
-  // 1-я, 4-я, 5-я попытки — всегда провал
-  if ([1, 4, 5].includes(currentAttempt)) {
-    setShowFailureNotification(true);
-    setTimeout(() => setShowFailureNotification(false), 3000);
-    return;
-  }
+    // 1-я, 4-я, 5-я попытки — всегда провал
+    if ([1, 4, 5].includes(currentAttempt)) {
+      setShowFailureNotification(true);
+      setTimeout(() => setShowFailureNotification(false), 3000);
+      return;
+    }
 
-  const wasSuccessful = await submitTask(taskId, {
-  screenshot: 'verified',
-  text: 'verified',
-});
+    const wasSuccessful = await submitTask(taskId, {
+      screenshot: 'verified',
+      text: 'verified',
+    });
 
-if (wasSuccessful) {
-  const task = tasks.find(t => t.id === taskId);
-  if (task) {
-    await updateUserBalance(task.reward);
-  }
+    if (wasSuccessful) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        await updateUserBalance(task.reward);
+      }
 
-  await refreshData();
+      await refreshData();
 
-  setShowSuccessNotification(true);
-  setTimeout(() => setShowSuccessNotification(false), 3000);
-} else {
-  setShowFailureNotification(true);
-  setTimeout(() => setShowFailureNotification(false), 3000);
-}
-};
+      setShowSuccessNotification(true);
+      setTimeout(() => setShowSuccessNotification(false), 3000);
+    } else {
+      setShowFailureNotification(true);
+      setTimeout(() => setShowFailureNotification(false), 3000);
+    }
+  };
 
 
   const toggleTaskDetails = (taskId: string) => {

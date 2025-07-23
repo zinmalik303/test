@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Task, TaskStatus } from '../types';
 import { mockTasks } from '../data/initialData';
 import { useAuth } from './AuthContext';
-import { supabase, TaskSubmission as DBTaskSubmission, UserProgress, dbHelpers } from '../lib/supabase';
+import { TaskSubmission as DBTaskSubmission, UserProgress, dbHelpers } from '../lib/supabase';
 
 interface TaskSubmission {
   taskId: string;
@@ -114,7 +114,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saveUserProgress = async (updates: Partial<UserProgress>) => {
     if (!supabaseUser) return;
-
     await dbHelpers.updateUserProgress(supabaseUser.id, updates);
   };
 
@@ -179,12 +178,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!['telegram', 'instagram'].includes(taskId)) {
               const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
               await updateTasksCompleted(approvedCount);
-            }
-
-            // Award money for the task
-            const task = getTaskById(taskId);
-            if (task && task.reward > 0) {
-              // This will be handled by the calling component
             }
 
             resolve(true);
