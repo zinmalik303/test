@@ -103,10 +103,14 @@ useEffect(() => {
     
     // Вторая попытка - успех
     try {
-      const wasSuccessful = await submitTask(taskId, { text: 'verified' });
+      const wasSuccessful = await submitTask(taskId, { 
+        text: 'verified',
+        screenshot: 'verified' 
+      });
       
       if (wasSuccessful) {
         await updateCompletedTasks(taskId, true);
+        await updateTasksCompleted((user?.tasksCompleted || 0) + 1);
         await refreshData();
         
         setShowSuccessNotification(true);
@@ -116,6 +120,7 @@ useEffect(() => {
         setTimeout(() => setShowFailureNotification(false), 3000);
       }
     } catch (error) {
+      console.error('Error in handleVerificationComplete:', error);
       setShowFailureNotification(true);
       setTimeout(() => setShowFailureNotification(false), 3000);
     }
