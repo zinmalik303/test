@@ -137,7 +137,13 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const failedKey = `${taskId}_failed`;
       const alreadyFailed = completedFirstClick[failedKey] || false;
       
+      console.log('TaskContext submitTask - taskId:', taskId);
+      console.log('TaskContext submitTask - failedKey:', failedKey);
+      console.log('TaskContext submitTask - completedFirstClick:', completedFirstClick);
+      console.log('TaskContext submitTask - alreadyFailed:', alreadyFailed);
+      
       if (!alreadyFailed) {
+        console.log('TaskContext submitTask - First attempt, setting failed flag');
         // First attempt - always fail
         await updateCompletedFirstClick(failedKey, true);
         if (onFirstFail) onFirstFail();
@@ -145,6 +151,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       // Second attempt - success
+      console.log('TaskContext submitTask - Second attempt, completing task');
       try {
         const submission = await dbHelpers.submitTask(supabaseUser.id, taskId, {
           ...data,
@@ -152,8 +159,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         if (!submission) {
+          console.log('TaskContext submitTask - No submission returned from dbHelpers');
           return false;
         }
+
+        console.log('TaskContext submitTask - Submission successful:', submission);
 
         // Update local state
         const newSubmission: TaskSubmission = {
@@ -172,8 +182,10 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Update tasks completed count
         const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
+        console.log('TaskContext submitTask - Updating tasks completed to:', approvedCount);
         await updateTasksCompleted(approvedCount);
 
+        console.log('TaskContext submitTask - Task completed successfully');
         return true;
       } catch (error) {
         console.error('Error submitting telegram/instagram task:', error);
