@@ -42,7 +42,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
 
 const Dashboard = () => {
-  const { user, updateUserBalance, setUserAsCongratulated, loading } = useAuth();
+  const { user, updateUserBalance, setUserAsCongratulated, loading, refreshUser } = useAuth();
   const { 
     submitTask, 
     isVerifying, 
@@ -50,7 +50,8 @@ const Dashboard = () => {
     completedTasks,
     updateCompletedTasks,
     completedFirstClick,
-    updateCompletedFirstClick
+    updateCompletedFirstClick,
+    refreshData
   } = useTasks();
 
   if (loading) {
@@ -79,66 +80,22 @@ useEffect(() => {
   const [showMinBalanceModal, setShowMinBalanceModal] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
   const [showFirstAttemptFailModal, setShowFirstAttemptFailModal] = useState(false);
-
-
-  const { scrollYProgress } = useScroll();
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [currentTask, setCurrentTask] = useState<'telegram' | 'instagram' | 'survey' | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [username, setUsername] = useState('');
-  
-
-
-const [hasGivenReward, setHasGivenReward] = useState(false);
-useEffect(() => {
-  const rewarded = localStorage.getItem('hasGivenReward');
-  if (rewarded === 'true') {
-    setHasGivenReward(true);
-  }
-}, []);
-
-
   const [currentSurveyStep, setCurrentSurveyStep] = useState(0);
   const [surveyAnswers, setSurveyAnswers] = useState<string[]>([]);
   const [showFailureNotification, setShowFailureNotification] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
 
- // 1. Считает выполненные и обновляет user
-useEffect(() => {
-  const completedCount = Object.values(completedTasks).filter(Boolean).length;
+  const { scrollYProgress } = useScroll();
 
-const totalApprovedInExplore = JSON.parse(localStorage.getItem('userSubmissions') || '[]')
-  .filter((s: any, i: number, self: any[]) =>
-    s.status === 'Approved' &&
-    self.findIndex(x => x.taskId === s.taskId) === i
-  ).length;
-
-const allTaskIds = new Set([
-  ...Object.entries(completedTasks)
-    .filter(([_, done]) => done)
-    .map(([taskId]) => taskId),
-  ...JSON.parse(localStorage.getItem('userSubmissions') || '[]')
-    .filter((s: any) => s.status === 'Approved')
-    .map((s: any) => s.taskId)
-]);
-
-const total = allTaskIds.size;
-
-if (user?.tasksCompleted < total) {
-  updateTasksCompleted(total);
-}
-
-
-}, [completedTasks]);
-
-// 2. Проверяет, можно ли выдать награду
-useEffect(() => {
-  checkAndRewardIfEligible(completedTasks);
-}, [completedTasks]);
-
-
-
+  // Check for reward eligibility when completed tasks change
+  useEffect(() => {
+    checkAndRewardIfEligible();
+  }, [completedTasks, user]);
 
   const surveyQuestions = [
     {
@@ -193,17 +150,15 @@ useEffect(() => {
   }
 };
 
- const checkAndRewardIfEligible = (newTasks: typeof completedTasks) => {
+ const checkAndRewardIfEligible = async () => {
   if (
-  Object.values(newTasks).every(task => task) &&
+  Object.values(completedTasks).every(task => task) &&
   !user?.congratulated &&
-  localStorage.getItem('hasGivenReward') !== 'true'
+  !user?.hasGivenReward
 ) {
 
-    updateUserBalance(10);
-    setUserAsCongratulated();
-    setHasGivenReward(true);
-    localStorage.setItem('hasGivenReward', 'true');
+    await updateUserBalance(10);
+    await setUserAsCongratulated();
 
     setShowCongratsModal(true);
   }
@@ -225,6 +180,7 @@ useEffect(() => {
     if (!wasSuccessful) return; // ❗ Если провал — не засчитываем задачу
 
     await updateCompletedTasks(currentTask, true);
+    await refreshData();
 
     setShowSuccessNotification(true);
     setTimeout(() => setShowSuccessNotification(false), 3000);
@@ -246,8 +202,10 @@ useEffect(() => {
       setCurrentSurveyStep(prev => prev + 1);
     } else {
       await updateCompletedTasks('survey', true);
+      await refreshData();
 
       setShowSurveyModal(false);
+      await refreshData();
     }
   };
 

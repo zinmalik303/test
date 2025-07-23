@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ExternalLink, CheckCircle, Clock, XCircle, ArrowRight } from 'lucide-react';
 import { useTasks } from '../contexts/TaskContext';
+import { useAuth } from '../contexts/AuthContext';
 import { TaskStatus } from '../types';
 
 const MyTasksPage: React.FC = () => {

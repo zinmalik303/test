@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, Profile } from '../lib/supabase';
+import { supabase, Profile, dbHelpers } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
@@ -13,6 +13,7 @@ interface User {
   referralCode: string;
   joinedAt: string;
   congratulated: boolean;
+  hasGivenReward: boolean;
 }
 
 interface AuthContextType {
@@ -30,6 +31,7 @@ interface AuthContextType {
   updateTasksCompleted: (count: number) => Promise<void>;
   updateProfile: (data: { username?: string; avatar?: string }) => Promise<void>;
   setUserAsCongratulated: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,16 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (userId: string) => {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error loading profile:', error);
-        return;
-      }
+      setLoading(true);
+      const profile = await dbHelpers.getProfile(userId);
 
       if (profile) {
         setUser({
@@ -91,12 +85,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           referralCode: profile.referral_code,
           joinedAt: profile.created_at,
           congratulated: profile.congratulated,
+          hasGivenReward: profile.has_given_reward,
         });
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    if (supabaseUser) {
+      await loadUserProfile(supabaseUser.id);
     }
   };
 
@@ -153,78 +154,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateUserBalance = async (amount: number) => {
     if (!supabaseUser || !user) return;
 
-    const newBalance = user.balance + amount;
-    const newTotalEarned = user.totalEarned + amount;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        balance: newBalance,
-        total_earned: newTotalEarned,
-      })
-      .eq('id', supabaseUser.id);
-
-    if (error) {
-      console.error('Error updating balance:', error);
-      return;
+    const success = await dbHelpers.updateBalanceAndEarnings(supabaseUser.id, amount);
+    if (success) {
+      setUser(prev => prev ? {
+        ...prev,
+        balance: prev.balance + amount,
+        totalEarned: prev.totalEarned + amount,
+      } : null);
     }
-
-    setUser(prev => prev ? {
-      ...prev,
-      balance: newBalance,
-      totalEarned: newTotalEarned,
-    } : null);
   };
 
   const updateTasksCompleted = async (count: number) => {
     if (!supabaseUser || !user) return;
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ tasks_completed: count })
-      .eq('id', supabaseUser.id);
+    const success = await dbHelpers.updateProfile(supabaseUser.id, {
+      tasks_completed: count,
+    });
 
-    if (error) {
-      console.error('Error updating tasks completed:', error);
-      return;
+    if (success) {
+      setUser(prev => prev ? { ...prev, tasksCompleted: count } : null);
     }
-
-    setUser(prev => prev ? { ...prev, tasksCompleted: count } : null);
   };
 
   const updateProfile = async (data: { username?: string; avatar?: string }) => {
     if (!supabaseUser || !user) return;
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(data)
-      .eq('id', supabaseUser.id);
-
-    if (error) {
-      console.error('Error updating profile:', error);
-      return;
+    const success = await dbHelpers.updateProfile(supabaseUser.id, data);
+    if (success) {
+      setUser(prev => prev ? { ...prev, ...data } : null);
     }
-
-    setUser(prev => prev ? { ...prev, ...data } : null);
   };
 
   const setUserAsCongratulated = async () => {
     if (!supabaseUser || !user) return;
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ 
-        congratulated: true,
-        has_given_reward: true 
-      })
-      .eq('id', supabaseUser.id);
+    const success = await dbHelpers.updateProfile(supabaseUser.id, {
+      congratulated: true,
+      has_given_reward: true,
+    });
 
-    if (error) {
-      console.error('Error setting congratulated:', error);
-      return;
+    if (success) {
+      setUser(prev => prev ? { 
+        ...prev, 
+        congratulated: true, 
+        hasGivenReward: true 
+      } : null);
     }
-
-    setUser(prev => prev ? { ...prev, congratulated: true } : null);
   };
 
   const isConnected = !!supabaseUser && !!userWallet;
@@ -246,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateTasksCompleted,
         updateProfile,
         setUserAsCongratulated,
+        refreshUser,
       }}
     >
       {children}

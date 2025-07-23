@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Task, TaskStatus } from '../types';
 import { mockTasks } from '../data/initialData';
 import { useAuth } from './AuthContext';
-import { supabase, TaskSubmission as DBTaskSubmission, UserProgress } from '../lib/supabase';
+import { supabase, TaskSubmission as DBTaskSubmission, UserProgress, dbHelpers } from '../lib/supabase';
 
 interface TaskSubmission {
   taskId: string;
@@ -35,6 +35,7 @@ interface TaskContextType {
   incrementFailAttemptCount: () => Promise<void>;
   isVerifying: boolean;
   verificationCountdown: number;
+  refreshData: () => Promise<void>;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -50,40 +51,39 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCountdown, setVerificationCountdown] = useState(10);
 
-  const { supabaseUser, updateTasksCompleted } = useAuth();
+  const { supabaseUser, updateTasksCompleted, refreshUser } = useAuth();
 
   // Load user data when user changes
   useEffect(() => {
     if (supabaseUser) {
-      loadUserSubmissions();
-      loadUserProgress();
+      loadAllUserData();
     } else {
       // Reset state when user logs out
-      setUserSubmissions([]);
-      setCompletedTasks({});
-      setCompletedFirstClick({});
-      setVisitedTasks({});
-      setGlobalAttemptCount(0);
-      setFailAttemptCount(0);
+      resetState();
     }
   }, [supabaseUser]);
 
-  const loadUserSubmissions = async () => {
+  const resetState = () => {
+    setUserSubmissions([]);
+    setCompletedTasks({});
+    setCompletedFirstClick({});
+    setVisitedTasks({});
+    setGlobalAttemptCount(0);
+    setFailAttemptCount(0);
+  };
+
+  const loadAllUserData = async () => {
     if (!supabaseUser) return;
 
     try {
-      const { data, error } = await supabase
-        .from('task_submissions')
-        .select('*')
-        .eq('user_id', supabaseUser.id)
-        .order('created_at', { ascending: false });
+      // Load submissions and progress in parallel
+      const [submissions, progress] = await Promise.all([
+        dbHelpers.getTaskSubmissions(supabaseUser.id),
+        dbHelpers.getUserProgress(supabaseUser.id)
+      ]);
 
-      if (error) {
-        console.error('Error loading submissions:', error);
-        return;
-      }
-
-      const submissions: TaskSubmission[] = data.map((sub: DBTaskSubmission) => ({
+      // Process submissions
+      const formattedSubmissions: TaskSubmission[] = submissions.map((sub: DBTaskSubmission) => ({
         taskId: sub.task_id,
         userId: sub.user_id,
         status: sub.status as TaskStatus,
@@ -92,56 +92,30 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         screenshot: sub.screenshot || undefined,
       }));
 
-      setUserSubmissions(submissions);
+      setUserSubmissions(formattedSubmissions);
+
+      // Process progress
+      if (progress) {
+        setCompletedTasks(progress.completed_tasks || {});
+        setCompletedFirstClick(progress.completed_first_click || {});
+        setVisitedTasks(progress.visited_tasks || {});
+        setGlobalAttemptCount(progress.global_attempt_count || 0);
+        setFailAttemptCount(progress.fail_attempt_count || 0);
+      }
     } catch (error) {
-      console.error('Error in loadUserSubmissions:', error);
+      console.error('Error loading user data:', error);
     }
   };
 
-  const loadUserProgress = async () => {
-    if (!supabaseUser) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', supabaseUser.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error loading progress:', error);
-        return;
-      }
-
-      if (data) {
-        setCompletedTasks(data.completed_tasks || {});
-        setCompletedFirstClick(data.completed_first_click || {});
-        setVisitedTasks(data.visited_tasks || {});
-        setGlobalAttemptCount(data.global_attempt_count || 0);
-        setFailAttemptCount(data.fail_attempt_count || 0);
-      }
-    } catch (error) {
-      console.error('Error in loadUserProgress:', error);
-    }
+  const refreshData = async () => {
+    await loadAllUserData();
+    await refreshUser();
   };
 
   const saveUserProgress = async (updates: Partial<UserProgress>) => {
     if (!supabaseUser) return;
 
-    try {
-      const { error } = await supabase
-        .from('user_progress')
-        .upsert({
-          user_id: supabaseUser.id,
-          ...updates,
-        });
-
-      if (error) {
-        console.error('Error saving progress:', error);
-      }
-    } catch (error) {
-      console.error('Error in saveUserProgress:', error);
-    }
+    await dbHelpers.updateUserProgress(supabaseUser.id, updates);
   };
 
   const getTaskById = (id: string): Task | undefined => {
@@ -175,21 +149,13 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const handleSuccess = async () => {
           try {
-            const { data: submission, error } = await supabase
-              .from('task_submissions')
-              .upsert({
-                user_id: supabaseUser.id,
-                task_id: taskId,
-                status: 'Approved',
-                screenshot: data.screenshot,
-                text: data.text,
-                submitted_at: new Date().toISOString(),
-              })
-              .select()
-              .single();
+            // Submit to database
+            const submission = await dbHelpers.submitTask(supabaseUser.id, taskId, {
+              ...data,
+              status: 'Approved',
+            });
 
-            if (error) {
-              console.error('Error submitting task:', error);
+            if (!submission) {
               resolve(false);
               return;
             }
@@ -209,21 +175,26 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return [...filtered, newSubmission];
             });
 
-            // Update tasks completed count
-            setTimeout(async () => {
-              if (!['telegram', 'instagram'].includes(taskId)) {
-                const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
-                await updateTasksCompleted(approvedCount);
-              }
-              resolve(true);
-            }, 500);
+            // Update tasks completed count if it's a real task
+            if (!['telegram', 'instagram'].includes(taskId)) {
+              const approvedCount = userSubmissions.filter(s => s.status === 'Approved').length + 1;
+              await updateTasksCompleted(approvedCount);
+            }
 
+            // Award money for the task
+            const task = getTaskById(taskId);
+            if (task && task.reward > 0) {
+              // This will be handled by the calling component
+            }
+
+            resolve(true);
           } catch (error) {
             console.error('Error in handleSuccess:', error);
             resolve(false);
           }
         };
 
+        // Handle special task logic
         if (['telegram', 'instagram'].includes(taskId)) {
           const alreadyFailed = completedFirstClick[`${taskId}_failed`] || false;
           if (!alreadyFailed) {
@@ -242,6 +213,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        // Global attempt logic
         if ([1, 4, 5].includes(globalAttemptCount + 1)) {
           await incrementFailAttemptCount();
           if (onFirstFail) onFirstFail();
@@ -305,6 +277,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         incrementFailAttemptCount,
         isVerifying,
         verificationCountdown,
+        refreshData,
       }}
     >
       {children}

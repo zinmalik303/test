@@ -44,7 +44,7 @@ import { useTasks } from '../contexts/TaskContext';
 
 const ExploreTasks = () => {
   const navigate = useNavigate();
-  const { updateUserBalance } = useAuth();
+  const { updateUserBalance, refreshUser } = useAuth();
   const { 
     tasks, 
     submitTask, 
@@ -52,7 +52,8 @@ const ExploreTasks = () => {
     visitedTasks,
     updateVisitedTasks,
     globalAttemptCount,
-    incrementGlobalAttemptCount
+    incrementGlobalAttemptCount,
+    refreshData
   } = useTasks();
   const [selectedDifficulty, setSelectedDifficulty] = useState<'Easy' | 'Medium' | 'Hard' | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -74,29 +75,19 @@ const ExploreTasks = () => {
   document.body.removeChild(link);
 };
 
-  const storedSubmissionsRaw = localStorage.getItem('userSubmissions');
-const storedSubmissions = storedSubmissionsRaw ? JSON.parse(storedSubmissionsRaw) : [];
+  // Get approved task IDs from userSubmissions
+  const approvedTaskIds = new Set(
+    userSubmissions
+      .filter(s => s.status === 'Approved')
+      .map(s => s.taskId)
+  );
 
-const approvedTaskIds = new Set(
-  storedSubmissions
-    .filter((s: any) => s.status === 'Approved')
-   .map((s: any) => String(s.taskId))
-
-);
-
-const availableTasks = tasks.filter(task => {
-  if (!task || !task.id) return false;
-  if (task.id === 'survey') return false; // 💥 исключаем только из explore
-  const isApproved = approvedTaskIds.has(task.id);
-  return !isApproved && (selectedDifficulty === null || task.difficulty === selectedDifficulty);
-});
-
-
-
-
-  useEffect(() => {
-  // Это перерендерит компонент, если userSubmissions обновились
-}, [userSubmissions]);
+  const availableTasks = tasks.filter(task => {
+    if (!task || !task.id) return false;
+    if (task.id === 'survey') return false; // exclude from explore
+    const isApproved = approvedTaskIds.has(task.id);
+    return !isApproved && (selectedDifficulty === null || task.difficulty === selectedDifficulty);
+  });
 
 
   useEffect(() => {
@@ -189,19 +180,13 @@ const handleSubmitVerification = () => {
   text: 'verified',
 });
 
-const matched = userSubmissions.find(s => s.taskId === taskId && s.status === 'Approved');
-
-if (wasSuccessful && matched) {
+if (wasSuccessful) {
   const task = tasks.find(t => t.id === taskId);
   if (task) {
-    updateUserBalance(task.reward);
+    await updateUserBalance(task.reward);
   }
 
-  const approvedCount = userSubmissions.filter(
-    (s, index, self) =>
-      s.status === 'Approved' &&
-      self.findIndex(x => x.taskId === s.taskId) === index
-  ).length;
+  await refreshData();
 
   setShowSuccessNotification(true);
   setTimeout(() => setShowSuccessNotification(false), 3000);
