@@ -79,9 +79,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: profile.id,
           username: profile.username,
           avatar: profile.avatar || undefined,
-          balance: parseFloat(profile.balance?.toString() || '0'),
-          tasksCompleted: profile.tasks_completed || 0,
-          totalEarned: parseFloat(profile.total_earned?.toString() || '0'),
+          balance: Number(profile.balance) || 0,
+          tasksCompleted: Number(profile.tasks_completed) || 0,
+          totalEarned: Number(profile.total_earned) || 0,
           level: profile.level || 1,
           referralCode: profile.referral_code || '',
           joinedAt: profile.created_at,
@@ -94,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // Create default profile if none exists
         const defaultProfile = {
+          id: userId,
           username: 'Web3 User',
           balance: 0,
           tasks_completed: 0,
@@ -103,7 +104,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           has_given_reward: false,
         };
         
-        const success = await dbHelpers.updateProfile(userId, defaultProfile);
+        const { error } = await supabase
+          .from('profiles')
+          .insert([defaultProfile]);
+        
+        const success = !error;
         if (success) {
           setUser({
             id: userId,
@@ -119,6 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hasGivenReward: false,
           });
           setUserWallet(userId.slice(0, 6) + '...' + userId.slice(-4));
+        } else {
+          console.error('Error creating profile:', error);
         }
       }
     } catch (error) {
